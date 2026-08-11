@@ -40,7 +40,7 @@ function handlePlay() {
       </span>
     </div>
     <p class="track-card__title">{{ track.title }}</p>
-    <p class="track-card__subtitle">{{ track.artistName }}</p>
+    <p class="track-card__subtitle">{{ track.artistName }}<span v-if="track.genre"> · {{ track.genre }}</span></p>
     </button>
     <button class="track-card__like" :class="{ 'track-card__like--active': liked }" :aria-label="liked ? `Unlike ${track.title}` : `Like ${track.title}`" :aria-pressed="liked" @click="userStore.toggleLike(track)">
       <svg width="15" height="15" viewBox="0 0 24 24" :fill="liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7.5-4.6-10-9.2C.5 8 2 4 6 4c2 0 3.6 1.2 6 4 2.4-2.8 4-4 6-4 4 0 5.5 4 4 7.8C19.5 16.4 12 21 12 21z"/></svg>

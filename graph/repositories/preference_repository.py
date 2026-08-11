@@ -11,15 +11,21 @@ class PreferenceRepository(BaseRepository):
     id_field = "preference_id"
 
     def upsert_preference(self, preference: Preference) -> dict[str, Any]:
-        node = self.merge(preference.to_dict())
+        # ``preference_id`` is an assertion identifier, not the identity of a
+        # listener's current preference. Merge by user/kind/value so a later
+        # "not Song B" replaces the old signal instead of creating a tie.
         query = """
-        MATCH (p:Preference {preference_id: $preference_id})
+        MERGE (p:Preference {user_id: $user_id, kind: $kind, value_key: toLower($value)})
+        ON CREATE SET p.preference_id = $preference_id, p.created_at = $updated_at
+        SET p.value = $value, p.strength = $strength, p.sentiment = $sentiment,
+            p.updated_at = $updated_at
+        WITH p
         MATCH (u:User {user_id: $user_id})
         MERGE (u)-[:HAS_PREFERENCE]->(p)
+        RETURN p
         """
-        self.client.execute_write(
-            query, {"preference_id": preference.preference_id, "user_id": preference.user_id}
-        )
+        result = self.client.execute_write(query, preference.to_dict())
+        node = result[0]["p"] if result else preference.to_dict()
         return node
 
     def get_for_user(self, user_id: str) -> list[dict[str, Any]]:

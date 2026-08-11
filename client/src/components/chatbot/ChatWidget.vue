@@ -63,7 +63,7 @@ function handleQuickReply(reply) {
         <input
           v-model="draft"
           type="text"
-          placeholder="Tell it what to play next…"
+          placeholder="Tell me a genre, artist, or song preference…"
           aria-label="Message"
           :disabled="chatStore.isSending"
         />

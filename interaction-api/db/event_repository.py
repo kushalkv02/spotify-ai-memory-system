@@ -14,10 +14,12 @@ class EventRepository:
         query = """
             INSERT INTO raw_events
                 (event_id, user_id, session_id, category, schema_version,
-                 occurred_at, received_at, payload, client_metadata)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb)
+                 subject_scope, surface, locale, occurred_at, received_at,
+                 consent_state, source_event_id, idempotency_key, payload, client_metadata)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15::jsonb)
             RETURNING id, event_id, user_id, session_id, category, schema_version,
-                      occurred_at, received_at, payload, client_metadata,
+                      subject_scope, surface, locale, occurred_at, received_at,
+                      consent_state, source_event_id, idempotency_key, payload, client_metadata,
                       is_important, importance_score, processed_at
         """
         try:
@@ -29,14 +31,22 @@ class EventRepository:
                     event.session_id,
                     event.category.value,
                     event.schema_version,
+                    event.subject_scope,
+                    event.surface.value,
+                    event.locale,
                     event.occurred_at,
                     event.received_at,
+                    event.consent_state.value,
+                    event.source_event_id,
+                    event.idempotency_key,
                     json.dumps(event.payload),
                     json.dumps(event.client_metadata),
                 )
         except Exception as exc:  # asyncpg.UniqueViolationError for dup event_id
             if "unique" in str(exc).lower():
-                raise DuplicateEventError(f"event_id already ingested: {event.event_id}") from exc
+                raise DuplicateEventError(
+                    f"event already ingested (event_id or idempotency_key): {event.event_id}"
+                ) from exc
             raise PersistenceError(str(exc)) from exc
 
         return self._row_to_record(row)

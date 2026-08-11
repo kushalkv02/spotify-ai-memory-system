@@ -95,17 +95,32 @@ class GraphAdapter:
     def recent_memories(self, user_id: str, limit: int = 20) -> list[dict[str, Any]]:
         return self.memory.recent_memories(user_id, limit=limit)
 
-    def get_memory(self, memory_id: str) -> Optional[dict[str, Any]]:
-        return self.memory.get_memory(memory_id)
+    def get_memory(self, user_id: str, version_id: str) -> Optional[dict[str, Any]]:
+        return self.memory.get_memory(user_id, version_id)
 
     def memories_referencing_track(
-        self, track_id: str, limit: int = 20
+        self, user_id: str, track_id: str, limit: int = 20
     ) -> list[dict[str, Any]]:
-        return self.memory.memories_referencing_track(track_id, limit=limit)
+        return self.memory.memories_referencing_track(user_id, track_id, limit=limit)
 
-    def delete_memory(self, memory_id: str) -> dict[str, Any]:
-        self.memory.delete_memory(memory_id)
-        return {"memory_id": memory_id, "deleted": True}
+    def expire_memory(self, user_id: str, version_id: str) -> dict[str, Any]:
+        return {"version_id": version_id, "expired": self.memory.expire_memory(user_id, version_id)}
+
+    def correct_memory(
+        self, user_id: str, previous_version_id: str, summary: str, contradiction: bool = False
+    ) -> dict[str, Any]:
+        return self.memory.correct_memory(
+            user_id, previous_version_id, summary, contradiction=contradiction
+        )
+
+    def retrieve_memories(
+        self, user_id: str, intent: str = "", related_track_ids: Optional[list[str]] = None,
+        limit: int = 8, context_budget: int = 1800,
+    ) -> list[dict[str, Any]]:
+        return self.memory.retrieve(
+            user_id, intent=intent, related_track_ids=related_track_ids,
+            limit=limit, context_budget=context_budget,
+        )
 
     # -- preferences -----------------------------------------------------
     def get_preferences(self, user_id: str) -> list[dict[str, Any]]:
@@ -121,9 +136,18 @@ class GraphAdapter:
     def recommend_by_genre(self, user_id: str, limit: int = 10) -> list[dict[str, Any]]:
         return self.recommendation.by_genre_affinity(user_id, limit=limit)
 
+    def recommend_by_mood(self, user_id: str, limit: int = 10) -> list[dict[str, Any]]:
+        return self.recommendation.by_mood(user_id, limit=limit)
+
     # -- reasoning / explanation --------------------------------------------
     def listening_timeline(self, user_id: str, days: int = 30) -> list[dict[str, Any]]:
         return self.reasoning.listening_timeline(user_id, days=days)
+
+    def get_genre_affinity(self, user_id: str) -> list[dict[str, Any]]:
+        return self.reasoning.genre_affinity(user_id)
+
+    def get_mood_affinity(self, user_id: str) -> list[dict[str, Any]]:
+        return self.reasoning.mood_affinity(user_id)
 
     # -- likes -----------------------------------------------------------
     def like_track(

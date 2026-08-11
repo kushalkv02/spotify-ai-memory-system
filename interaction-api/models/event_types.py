@@ -8,6 +8,30 @@ class EventCategory(str, Enum):
     UI_ACTION = "ui_action"
 
 
+class EventSurface(str, Enum):
+    CHAT = "chat"
+    PLAYER = "player"
+    LIBRARY = "library"
+    CATALOG = "catalog"
+    API = "api"
+    UNKNOWN = "unknown"
+
+
+class ConsentState(str, Enum):
+    PENDING = "pending"
+    GRANTED = "granted"
+    DENIED = "denied"
+
+
+class MemoryClass(str, Enum):
+    EPISODE = "episode"
+    EXPLICIT_PREFERENCE = "explicit_preference"
+    CANDIDATE_PREFERENCE = "candidate_preference"
+    EXCLUSION = "exclusion"
+    CORRECTION = "correction"
+    NON_MEMORY = "non_memory"
+
+
 class PlaybackAction(str, Enum):
     PLAY = "play"
     PAUSE = "pause"

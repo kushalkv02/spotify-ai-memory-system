@@ -29,16 +29,29 @@ def register(mcp: FastMCP, adapter: GraphAdapter) -> None:
         return to_text(adapter.recent_memories(user_id, limit=limit))
 
     @mcp.tool()
-    def get_memory(memory_id: str) -> str:
-        """Get one memory by its stable memory ID."""
-        return to_text(adapter.get_memory(memory_id))
+    def get_memory(user_id: str, version_id: str) -> str:
+        """Get one memory assertion inside the requesting user's identity scope."""
+        return to_text(adapter.get_memory(user_id, version_id))
 
     @mcp.tool()
-    def get_memories_referencing_track(track_id: str, limit: int = 20) -> str:
-        """Get memories that explicitly reference a track."""
-        return to_text(adapter.memories_referencing_track(track_id, limit=limit))
+    def get_memories_referencing_track(user_id: str, track_id: str, limit: int = 20) -> str:
+        """Get current memories for one user that explicitly reference a track."""
+        return to_text(adapter.memories_referencing_track(user_id, track_id, limit=limit))
 
     @mcp.tool()
-    def delete_memory(memory_id: str) -> str:
-        """Permanently delete a memory and its graph relationships."""
-        return to_text(adapter.delete_memory(memory_id))
+    def expire_memory(user_id: str, version_id: str) -> str:
+        """Expire a memory assertion without erasing its audit history."""
+        return to_text(adapter.expire_memory(user_id, version_id))
+
+    @mcp.tool()
+    def correct_memory(user_id: str, previous_version_id: str, summary: str, contradiction: bool = False) -> str:
+        """Append a correction (or contradiction) while retaining the prior assertion."""
+        return to_text(adapter.correct_memory(user_id, previous_version_id, summary, contradiction))
+
+    @mcp.tool()
+    def retrieve_memories(
+        user_id: str, intent: str = "", related_track_ids: list[str] | None = None,
+        limit: int = 8, context_budget: int = 1800,
+    ) -> str:
+        """Build a scoped, diverse hybrid-retrieval memory context pack."""
+        return to_text(adapter.retrieve_memories(user_id, intent, related_track_ids, limit, context_budget))

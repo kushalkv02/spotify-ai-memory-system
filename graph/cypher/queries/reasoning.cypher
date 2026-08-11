@@ -7,7 +7,7 @@
 
 // Why was `rec_track_id` recommended to `user_id`? Show the connecting path.
 // params: $user_id, $rec_track_id
-MATCH path = (u:User {user_id: $user_id})-[:PLAYED]->(t:Track)<-[:PERFORMED]-(ar:Artist)-[:PERFORMED]->(rec:Track {track_id: $rec_track_id})
+MATCH path = (u:User {user_id: $user_id})-[:PLAYED]->(t:Track)<-[:BY]-(ar:Artist)-[:BY]->(rec:Track {track_id: $rec_track_id})
 RETURN [n IN nodes(path) | coalesce(n.title, n.name, n.user_id)] AS explanation_path
 LIMIT 5;
 

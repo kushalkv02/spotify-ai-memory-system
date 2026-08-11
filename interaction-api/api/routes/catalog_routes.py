@@ -2,14 +2,19 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ...services.client_state_service import client_state
+from ...integrations.graph_client import GraphClient
+from ..dependencies import get_graph_client
 from ..middleware.auth_middleware import authenticate_request
 
 router = APIRouter(tags=["catalog"])
 
 
 @router.get("/tracks/feed")
-async def get_feed(user_id: str = Depends(authenticate_request)):
-    return client_state.feed(user_id)
+async def get_feed(
+    user_id: str = Depends(authenticate_request), graph_client: GraphClient = Depends(get_graph_client)
+):
+    graph_recommendations = await graph_client.recommendations_for_user(user_id, limit=20)
+    return client_state.feed(user_id, [item["track_id"] for item in graph_recommendations if item.get("track_id")])
 
 
 @router.get("/tracks/search")
@@ -23,8 +28,15 @@ async def get_library(user_id: str = Depends(authenticate_request)):
 
 
 @router.get("/recommendations")
-async def get_recommendations(limit: int = Query(default=20, ge=1, le=50), user_id: str = Depends(authenticate_request)):
-    return {"tracks": client_state.feed(user_id)["recommended"][:limit]}
+async def get_recommendations(
+    limit: int = Query(default=20, ge=1, le=50), user_id: str = Depends(authenticate_request),
+    graph_client: GraphClient = Depends(get_graph_client),
+):
+    graph_recommendations = await graph_client.recommendations_for_user(user_id, limit=limit)
+    return {"tracks": client_state.recommend(
+        user_id, limit=limit,
+        graph_track_ids=[item["track_id"] for item in graph_recommendations if item.get("track_id")],
+    )}
 
 
 @router.get("/artists")

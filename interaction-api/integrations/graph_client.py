@@ -21,11 +21,10 @@ written here, it should be visible to `spotify_mcp` tools (e.g.
 memory_tools.py, recommendation_tools.py) on their next query — no direct
 network call between the two services is needed.
 
-IMPORTANT: The method names called below (`record_interaction`,
-`create_memory`, `update_preferences_from_event`) are best-guess based on
-your file names (graph/services/interaction_service.py, memory_service.py,
-preference_service.py). Adjust them to match your actual method signatures.
+The adapter calls the public graph-service APIs directly.  It intentionally
+keeps the interaction API independent of Neo4j repositories and Cypher.
 """
+import asyncio
 from typing import Any, Optional
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -43,6 +42,8 @@ try:
     from graph.services.interaction_service import InteractionService as GraphInteractionService
     from graph.services.memory_service import MemoryService as GraphMemoryService
     from graph.services.preference_service import PreferenceService as GraphPreferenceService
+    from graph.services.recommendation_service import RecommendationService as GraphRecommendationService
+    from graph.services.reasoning_service import ReasoningService as GraphReasoningService
     from graph.neo4j_client import Neo4jClient
 
     _graph_available = True
@@ -72,6 +73,8 @@ class GraphClient:
             self._interaction_service = GraphInteractionService()
             self._memory_service = GraphMemoryService()
             self._preference_service = GraphPreferenceService()
+            self._recommendation_service = GraphRecommendationService()
+            self._reasoning_service = GraphReasoningService()
 
     async def record_interaction(self, event: RawEventRecord) -> None:
         """Write a raw interaction into the graph (e.g. (:User)-[:PERFORMED]->(:Interaction)).
@@ -109,7 +112,13 @@ class GraphClient:
             self._memory_service.store_memory(
                 user_id=event.user_id,
                 summary=summary_text,
+                importance=event.importance_score or 0.5,
                 track_ids=[event.payload["track_id"]] if event.payload.get("track_id") else [],
+                source_event_id=str(event.event_id),
+                source=f"event:{event.category}",
+                confidence=event.importance_score or 0.5,
+                explicitness=1.0 if event.payload.get("explicit_preference") else 0.0,
+                subject_scope=event.subject_scope,
             )
         except Exception as exc:
             logger.error("Graph writeback (create_memory) failed: %s", exc)
@@ -156,6 +165,158 @@ class GraphClient:
         except Exception as exc:
             logger.error("Graph writeback (set_explicit_preference) failed: %s", exc)
             raise GraphWritebackError(str(exc)) from exc
+
+    async def recommendations_for_user(self, user_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        """Collect graph-native strategies without making recommendations unavailable.
+
+        The client-state ranker blends these with the fresh chat preference
+        projection, so chat changes are visible immediately even if Neo4j is
+        temporarily offline.
+        """
+        if not self.enabled:
+            return []
+        try:
+            results: list[dict[str, Any]] = []
+            for strategy in (
+                self._recommendation_service.collaborative,
+                self._recommendation_service.by_artist_affinity,
+                self._recommendation_service.by_genre_affinity,
+            ):
+                results.extend(strategy(user_id, limit=limit))
+            unique: dict[str, dict[str, Any]] = {}
+            for item in results:
+                if item.get("track_id"):
+                    unique.setdefault(item["track_id"], item)
+            return list(unique.values())[:limit]
+        except Exception as exc:
+            logger.warning("Graph recommendations unavailable: %s", exc)
+            return []
+
+    async def recommendation_evidence_for_user(
+        self, user_id: str, intent: str, *, recommendation_limit: int = 12,
+        memory_limit: int = 6, preference_limit: int = 12, reasoning_days: int = 30,
+        reasoning_limit: int = 12,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Read all Neo4j evidence required for a Gemini recommendation turn.
+
+        Unlike the individual best-effort helpers, this is deliberately
+        fail-closed: Gemini must not be described as graph-grounded when the
+        graph integration is disabled or one of its required reads fails.
+        Empty lists are valid for a new listener; an unavailable graph is not.
+        """
+        if not self.enabled:
+            raise GraphWritebackError(
+                "Neo4j graph integration is disabled or the graph package could not be loaded"
+            )
+        try:
+            return await asyncio.to_thread(
+                self._recommendation_evidence_for_user,
+                user_id,
+                intent,
+                recommendation_limit,
+                memory_limit,
+                preference_limit,
+                reasoning_days,
+                reasoning_limit,
+            )
+        except Exception as exc:
+            logger.error("Required Neo4j recommendation evidence is unavailable: %s", exc)
+            raise GraphWritebackError("Required Neo4j recommendation evidence is unavailable") from exc
+
+    def _recommendation_evidence_for_user(
+        self, user_id: str, intent: str, recommendation_limit: int,
+        memory_limit: int, preference_limit: int, reasoning_days: int,
+        reasoning_limit: int,
+    ) -> dict[str, list[dict[str, Any]]]:
+        recommendation_results: list[dict[str, Any]] = []
+        for strategy in (
+            self._recommendation_service.collaborative,
+            self._recommendation_service.by_artist_affinity,
+            self._recommendation_service.by_genre_affinity,
+        ):
+            recommendation_results.extend(strategy(user_id, limit=recommendation_limit))
+        unique_recommendations: dict[str, dict[str, Any]] = {}
+        for item in recommendation_results:
+            if item.get("track_id"):
+                unique_recommendations.setdefault(item["track_id"], item)
+
+        memories = self._memory_service.retrieve(
+            user_id, intent=intent, surface="chat", limit=memory_limit, context_budget=1200,
+        )
+        preferences = self._preference_service.get_preferences(user_id)
+        reasoning = self._reasoning_service.listening_timeline(user_id, days=reasoning_days)
+        return {
+            "graph_recommendations": list(unique_recommendations.values())[:recommendation_limit],
+            "memory_context": [
+                {
+                    "summary": item.get("summary", ""),
+                    "strength": round(float(item.get("importance", .5)) * float(item.get("confidence", 1)), 3),
+                    "memory_class": item.get("source", "memory"),
+                }
+                for item in memories
+            ],
+            "preference_context": [
+                {
+                    "kind": item.get("kind", "preference"),
+                    "value": item.get("value", ""),
+                    "sentiment": item.get("sentiment", "like"),
+                    "strength": round(float(item.get("strength", 0.0)), 3),
+                }
+                for item in preferences[:preference_limit]
+                if item.get("value")
+            ],
+            "reasoning_context": reasoning[:reasoning_limit],
+        }
+
+    async def memory_context_for_recommendations(self, user_id: str, intent: str, limit: int = 6) -> list[dict[str, Any]]:
+        """Return only scored memory summaries approved for recommendation use."""
+        if not self.enabled:
+            return []
+        try:
+            memories = self._memory_service.retrieve(
+                user_id, intent=intent, surface="chat", limit=limit, context_budget=1200,
+            )
+            return [
+                {
+                    "summary": item.get("summary", ""),
+                    "strength": round(float(item.get("importance", .5)) * float(item.get("confidence", 1)), 3),
+                    "memory_class": item.get("source", "memory"),
+                }
+                for item in memories
+            ]
+        except Exception as exc:
+            logger.warning("Recommendation memory retrieval unavailable: %s", exc)
+            return []
+
+    async def preference_context_for_recommendations(self, user_id: str, limit: int = 12) -> list[dict[str, Any]]:
+        """Return persisted Neo4j preferences as bounded recommendation evidence."""
+        if not self.enabled:
+            return []
+        try:
+            preferences = self._preference_service.get_preferences(user_id)
+            return [
+                {
+                    "kind": item.get("kind", "preference"),
+                    "value": item.get("value", ""),
+                    "sentiment": item.get("sentiment", "like"),
+                    "strength": round(float(item.get("strength", 0.0)), 3),
+                }
+                for item in preferences[:limit]
+                if item.get("value")
+            ]
+        except Exception as exc:
+            logger.warning("Recommendation preference retrieval unavailable: %s", exc)
+            return []
+
+    async def reasoning_context_for_recommendations(self, user_id: str, days: int = 30, limit: int = 12) -> list[dict[str, Any]]:
+        """Return recent listening reasoning facts from the Neo4j graph."""
+        if not self.enabled:
+            return []
+        try:
+            return self._reasoning_service.listening_timeline(user_id, days=days)[:limit]
+        except Exception as exc:
+            logger.warning("Recommendation reasoning retrieval unavailable: %s", exc)
+            return []
 
     async def upsert_account(self, *, user_id: str, login: str, email: str, display_name: str) -> None:
         """Create the account's user node and its initial graph relationships."""

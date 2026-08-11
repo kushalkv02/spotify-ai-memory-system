@@ -11,8 +11,6 @@ from ...models.event_types import EventCategory
 from ...utils.exceptions import ConsentDeniedError, EventValidationError, DuplicateEventError
 from ...orchestrator import InteractionOrchestrator
 from ..dependencies import get_orchestrator
-from ..dependencies import get_graph_client
-from ...integrations.graph_client import GraphClient
 from ..middleware.auth_middleware import authenticate_request
 from ...services.client_state_service import client_state
 from ...utils.exceptions import GraphWritebackError, PersistenceError
@@ -234,25 +232,26 @@ async def unfollow_artist(
 async def submit_explicit_preference(
     preference: ExplicitPreferenceInput,
     user_id: str = Depends(authenticate_request),
-    graph_client: GraphClient = Depends(get_graph_client),
+    orchestrator: InteractionOrchestrator = Depends(get_orchestrator),
 ):
-    """Persist a user-declared genre, artist, or mood preference."""
+    """Capture a declared preference through the same versioned event contract."""
     if preference.user_id != user_id:
         raise HTTPException(status_code=403, detail="user_id in body must match authenticated user")
 
-    try:
-        return await graph_client.set_explicit_preference(
-            user_id=user_id,
-            kind=preference.kind,
-            value=preference.value,
-            sentiment=preference.sentiment,
-            strength=preference.strength,
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Unable to persist preference",
-        ) from exc
+    record = await _persist_client_event(
+        user_id=user_id,
+        category=EventCategory.CHAT,
+        payload={
+            "message": preference.source_message or f"I {preference.sentiment} {preference.value}",
+            "explicit_preference": True,
+            "kind": preference.kind,
+            "value": preference.value,
+            "sentiment": preference.sentiment,
+            "strength": preference.strength,
+        },
+        orchestrator=orchestrator,
+    )
+    return {"recorded": True, "eventId": str(record.event_id)}
 
 
 @router.post("/events", response_model=RawEventRecord, status_code=status.HTTP_201_CREATED)

@@ -66,6 +66,65 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### Gemini chat configuration
+
+The browser keeps talking to this FastAPI API; Gemini is the LLM behind the
+chat route, not the MCP client. Set the key in the repo-root `.env` before
+starting the API:
+
+```bash
+INTERACTION_API_GEMINI_API_KEY=your_google_ai_studio_key
+# Optional: defaults to gemini-2.5-flash
+INTERACTION_API_GEMINI_MODEL=gemini-2.5-flash
+```
+
+The chat service uses Gemini structured output to extract separate `genre`,
+`artist`, `track`, and `mood` preferences. It then persists the raw chat event
+through the normal memory pipeline before updating the recommendation ranker.
+For example, “I like Nova Lane's Midnight Circuit but not Neon Rain” becomes
+two independent track signals: a like for *Midnight Circuit* and an exclusion
+for *Neon Rain*. If no key is configured or Gemini is unavailable, a
+catalog-aware deterministic fallback preserves the same flow for local work.
+
+### LangGraph automation
+
+`services/chat_workflow.py` is the orchestrator for every `POST /chat/messages`
+request. It keeps the existing Postgres/Neo4j services as the systems of
+record, while LangGraph controls the order and state passed between stages:
+
+```mermaid
+flowchart LR
+  A[understand\nGemini + fallback] --> B[persist\nEvent + memory pipeline]
+  B --> C[project_preferences\nNeo4j + UI projection]
+  C --> D[recommend\nGraph + local ranker]
+  D --> E[compose_reply]
+```
+
+This is deliberately a per-turn workflow without a LangGraph checkpoint:
+conversation and memory durability remain in the project’s existing Postgres
+and Neo4j data model. Add a LangGraph checkpointer later only if you need
+interrupt/resume or human approval between these nodes.
+
+### Memory decision strength
+
+`MemoryExtractor` is the decision engine. It uses a deterministic 0–1 score,
+not an LLM verdict, to decide whether a captured event becomes retrievable
+memory. The default retention threshold is `0.55` and is configurable through
+`INTERACTION_API_MEMORY_RETENTION_THRESHOLD`.
+
+| Signal | Effect |
+| --- | --- |
+| Explicit like/dislike, correction, or exclusion | high base score |
+| Multiple extracted preferences and canonical entities | increases confidence |
+| “love”, “hate”, “never”, contrast/correction phrasing | increases strength |
+| Single passive play/skip or vague chat | remains below retention |
+
+The retained score is written to `raw_events.importance_score`, stored as the
+Neo4j memory importance/confidence, and scales the preference edge used for
+ranking. Gemini receives only retained memory summaries plus their strengths;
+it may select and explain tracks from the deterministic candidate list, but it
+cannot increase a memory’s strength or bypass exclusions.
+
 ### 2. Start Postgres and create the table
 
 Easiest with Docker:
@@ -143,6 +202,18 @@ curl -X POST http://localhost:8000/interactions/events \
         "payload": {"message": "play something upbeat for a workout"}
       }'
 ```
+
+To exercise the chatbot endpoint directly:
+
+```bash
+curl -X POST http://localhost:8000/chat/messages \
+  -H "Content-Type: application/json" -H "X-User-Id: user_123" \
+  -d "{\"content\":\"I like Nova Lane's Midnight Circuit but not Neon Rain\"}"
+```
+
+The response includes `preferencesSaved` and `trackRefs`; `Neon Rain` is
+excluded from the client recommendation projection, while the raw message is
+saved as a durable memory by the event pipeline.
 
 ### 7. Verify idempotency
 

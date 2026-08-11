@@ -103,6 +103,19 @@ export const usePlayerStore = defineStore('player', {
       this.repeatMode = { off: 'all', all: 'one', one: 'off' }[this.repeatMode]
     },
 
+    resetSession() {
+      // Stop the previous account's playback before discarding its queue.
+      this._stopTicking()
+      this.queue = []
+      this.queueIndex = -1
+      this.currentTrack = null
+      this.isPlaying = false
+      this.progressSeconds = 0
+      this.shuffle = false
+      this.repeatMode = 'off'
+      this._playSource = null
+    },
+
     _loadCurrent() {
       this.currentTrack = this.queue[this.queueIndex] || null
       this.progressSeconds = 0

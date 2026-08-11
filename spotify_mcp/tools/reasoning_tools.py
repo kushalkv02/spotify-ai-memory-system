@@ -8,6 +8,16 @@ from ..utils.formatting import to_text
 
 
 def register(mcp: FastMCP, adapter: GraphAdapter) -> None:
+
+    @mcp.tool()
+    def get_genre_affinity(user_id: str) -> str:
+        """Get a user's derived genre affinities."""
+        return to_text(adapter.get_genre_affinity(user_id))
+    @mcp.tool()
+    def get_mood_affinity(user_id: str) -> str:
+        """Get a user's derived mood affinities."""
+        return to_text(adapter.get_mood_affinity(user_id))
+
     @mcp.tool()
     def get_listening_timeline(user_id: str, days: int = 30) -> str:
         """Get a user's play history over the last N days, most recent first."""

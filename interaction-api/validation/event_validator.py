@@ -12,7 +12,7 @@ user_id before this layer ever runs). This layer covers: version support,
 payload shape, and consent.
 """
 from ..models.event import EventEnvelope, ValidatedEvent
-from ..models.event_types import EventCategory, PlaybackAction, UIActionType
+from ..models.event_types import ConsentState, EventCategory, PlaybackAction, UIActionType
 from ..utils.exceptions import ConsentDeniedError, EventValidationError
 from ..utils.timestamps import utc_now
 from .event_versioning import EventSchemaRegistry
@@ -37,8 +37,10 @@ class EventValidator:
             raise ConsentDeniedError(result.missing_scopes)
 
         # 4. stamp + freeze
+        # A client may not claim consent. The server records the result.
         return ValidatedEvent(
-            **envelope.model_dump(),
+            **envelope.model_dump(exclude={"consent_state"}),
+            consent_state=ConsentState.GRANTED,
             received_at=utc_now(),
             consent_scopes_checked=self.consent_checker.required_scopes_for(envelope.category),
         )

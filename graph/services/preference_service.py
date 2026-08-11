@@ -60,10 +60,11 @@ class PreferenceService:
         resolved_strength = strength if strength is not None else (1.0 if sentiment == "like" else 0.0)
 
         pref = Preference(
-        preference_id=f"pref_{uuid.uuid4().hex[:12]}",
-        user_id=user_id,
-        kind=kind,
-        value=value,
-        strength=resolved_strength,
+            preference_id=f"pref_{uuid.uuid4().hex[:12]}",
+            user_id=user_id,
+            kind=kind,
+            value=value,
+            strength=resolved_strength,
+            sentiment=sentiment,
         )
         return self.preferences.upsert_preference(pref)

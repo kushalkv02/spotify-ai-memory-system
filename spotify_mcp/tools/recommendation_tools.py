@@ -26,4 +26,17 @@ def register(mcp: FastMCP, adapter: GraphAdapter) -> None:
         """Recommend unplayed tracks from genres the user plays most often."""
         return to_text(adapter.recommend_by_genre(user_id, limit=limit))
 
-    
+    @mcp.tool()
+    def recommend_by_mood(user_id: str, limit: int = 10) -> str:
+        """Recommend tracks by mood."""
+        return to_text(adapter.recommend_by_mood(user_id, limit=limit))
+
+    @mcp.tool()
+    def listening_timeline(user_id: str, days: int = 30) -> str:
+        """Return a timeline of the user's listening history."""
+        return to_text(adapter.listening_timeline(user_id, days=days))
+
+    @mcp.tool()
+    def get_user_preferences(user_id: str) -> str:
+        """Get a user's derived preferences (genre/artist/mood affinities)."""
+        return to_text(adapter.get_preferences(user_id))

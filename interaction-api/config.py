@@ -105,16 +105,25 @@ class Settings(BaseSettings):
     allow_dev_consent_bypass: bool = True
 
     # --- Event contract ---
-    current_event_schema_version: str = "1.0.0"
-    supported_event_schema_versions: list[str] = ["1.0.0"]
+    current_event_schema_version: str = "1.1.0"
+    supported_event_schema_versions: list[str] = ["1.0.0", "1.1.0"]
 
     # --- Memory Decision Engine ---
-    importance_threshold: float = 0.5
+    # A decision must reach this score before it becomes retrievable memory.
+    # The same score is passed to the graph as memory importance and to the
+    # recommendation workflow as a preference weight.
+    memory_retention_threshold: float = 0.55
 
     # --- Graph integration ---
     # Neo4j configuration is handled by the existing `graph` package.
     # The Interaction API simply imports and uses that package.
     enable_graph_writeback: bool = True
+
+    # --- Gemini chat understanding ---
+    # Leave the key unset for deterministic local development.  The chat
+    # service falls back safely, while production uses Gemini structured JSON.
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-2.5-flash"
 
     # Pydantic v2 configuration
     model_config = SettingsConfigDict(

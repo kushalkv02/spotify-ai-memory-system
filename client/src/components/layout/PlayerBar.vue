@@ -40,7 +40,7 @@ function onVolume(e) {
       <div v-else class="playerbar__cover playerbar__cover--placeholder" aria-hidden="true" />
       <div class="playerbar__meta">
         <p class="playerbar__title">{{ playerStore.currentTrack.title }}</p>
-        <p class="playerbar__artist">{{ playerStore.currentTrack.artistName }}</p>
+        <p class="playerbar__artist">{{ playerStore.currentTrack.artistName }}<span v-if="playerStore.currentTrack.genre"> · {{ playerStore.currentTrack.genre }}</span></p>
       </div>
       <button
         class="icon-btn playerbar__like"

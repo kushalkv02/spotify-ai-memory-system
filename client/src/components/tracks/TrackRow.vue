@@ -47,7 +47,7 @@ function handlePlay() {
       <div v-else class="track-row__cover track-row__cover--placeholder" aria-hidden="true" />
       <div class="track-row__meta">
         <p class="track-row__title">{{ track.title }}</p>
-        <p class="track-row__artist">{{ track.artistName }}</p>
+        <p class="track-row__artist">{{ track.artistName }}<span v-if="track.genre"> · {{ track.genre }}</span></p>
       </div>
     </div>
 

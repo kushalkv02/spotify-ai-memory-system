@@ -12,7 +12,9 @@ export const useChatStore = defineStore('chat', {
     isSending: false,
     isLoadingHistory: false,
     error: null,
-    hasLoadedHistory: false
+    hasLoadedHistory: false,
+    // In-flight requests from a previous login must never update this store.
+    _sessionMarker: 0
   }),
 
   getters: {
@@ -36,10 +38,24 @@ export const useChatStore = defineStore('chat', {
       this.isOpen ? this.close() : this.open()
     },
 
+    resetSession() {
+      // Pinia stores outlive route changes, so clear account-scoped UI state.
+      this._sessionMarker += 1
+      this.isOpen = false
+      this.messages = []
+      this.quickReplies = []
+      this.isSending = false
+      this.isLoadingHistory = false
+      this.error = null
+      this.hasLoadedHistory = false
+    },
+
     async loadHistory() {
+      const sessionMarker = this._sessionMarker
       this.isLoadingHistory = true
       try {
         const history = await chatService.getHistory()
+        if (sessionMarker !== this._sessionMarker) return
         if (history?.length) {
           this.messages = history
         } else if (!this.messages.length) {
@@ -47,10 +63,11 @@ export const useChatStore = defineStore('chat', {
         }
         this.hasLoadedHistory = true
       } catch (err) {
+        if (sessionMarker !== this._sessionMarker) return
         this.error = err.message
         if (!this.messages.length) this._seedGreeting()
       } finally {
-        this.isLoadingHistory = false
+        if (sessionMarker === this._sessionMarker) this.isLoadingHistory = false
       }
     },
 
@@ -59,9 +76,9 @@ export const useChatStore = defineStore('chat', {
         this.quickReplies = await chatService.getQuickReplies()
       } catch {
         this.quickReplies = [
-          { id: 'more-like-this', label: 'More like this' },
-          { id: 'change-mood', label: 'Change the mood' },
-          { id: 'less-of-genre', label: 'Less of this genre' }
+          { id: 'genre-electronic', label: 'I like electronic' },
+          { id: 'artist-nova', label: 'I like Nova Lane' },
+          { id: 'song-contrast', label: 'I like Midnight Circuit but not Neon Rain' }
         ]
       }
     },
@@ -74,6 +91,7 @@ export const useChatStore = defineStore('chat', {
       this.messages.push(userMessage)
 
       const pendingId = nextId()
+      const sessionMarker = this._sessionMarker
       this.messages.push({ id: pendingId, role: 'assistant', content: '', pending: true })
 
       this.isSending = true
@@ -85,6 +103,7 @@ export const useChatStore = defineStore('chat', {
           .map((m) => ({ role: m.role, content: m.content }))
 
         const reply = await chatService.sendMessage(trimmed, recentContext)
+        if (sessionMarker !== this._sessionMarker) return
         const idx = this.messages.findIndex((m) => m.id === pendingId)
         if (idx !== -1) {
           this.messages[idx] = {
@@ -97,6 +116,7 @@ export const useChatStore = defineStore('chat', {
         }
         if (reply.quickReplies?.length) this.quickReplies = reply.quickReplies
       } catch (err) {
+        if (sessionMarker !== this._sessionMarker) return
         this.error = err.message
         const idx = this.messages.findIndex((m) => m.id === pendingId)
         if (idx !== -1) {
@@ -108,7 +128,7 @@ export const useChatStore = defineStore('chat', {
           }
         }
       } finally {
-        this.isSending = false
+        if (sessionMarker === this._sessionMarker) this.isSending = false
       }
     },
 
@@ -122,7 +142,7 @@ export const useChatStore = defineStore('chat', {
           id: nextId(),
           role: 'assistant',
           content:
-            "Hey — I'm keeping track of what you play and skip so I can shape better recommendations. Tell me what you're in the mood for."
+            "Hey — I use what you play, skip, and tell me to shape recommendations. Which genre do you like?"
         }
       ]
     }

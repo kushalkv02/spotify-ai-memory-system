@@ -8,6 +8,7 @@ from typing import Any
 
 from ..neo4j_client import get_client
 from ..queries.temporal_queries import RECENT_PLAY_TIMELINE_QUERY
+from ..queries.reasoning_queries import (GENRE_AFFINITY_REASONING_QUERY, MOOD_AFFINITY_REASONING_QUERY)
 
 
 class ReasoningService:
@@ -17,4 +18,16 @@ class ReasoningService:
     def listening_timeline(self, user_id: str, days: int = 30) -> list[dict[str, Any]]:
         return self.client.execute_read(
             RECENT_PLAY_TIMELINE_QUERY, {"user_id": user_id, "days": days}
+        )
+
+    def genre_affinity(self, user_id: str) -> list[dict[str, Any]]:
+        """Aggregate play-count by genre so the LLM can explain genre biases."""
+        return self.client.execute_read(
+            GENRE_AFFINITY_REASONING_QUERY, {"user_id": user_id}
+        )
+
+    def mood_affinity(self, user_id: str) -> list[dict[str, Any]]:
+        """Aggregate play-count by mood so the LLM can explain mood biases."""
+        return self.client.execute_read(
+            MOOD_AFFINITY_REASONING_QUERY, {"user_id": user_id}
         )

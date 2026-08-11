@@ -38,8 +38,14 @@ class PostgresClient:
                     session_id TEXT,
                     category TEXT NOT NULL,
                     schema_version TEXT NOT NULL,
+                    subject_scope TEXT NOT NULL DEFAULT 'user',
+                    surface TEXT NOT NULL DEFAULT 'unknown',
+                    locale TEXT NOT NULL DEFAULT 'und',
                     occurred_at TIMESTAMPTZ NOT NULL,
                     received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    consent_state TEXT NOT NULL DEFAULT 'pending',
+                    source_event_id TEXT,
+                    idempotency_key TEXT,
                     payload JSONB NOT NULL,
                     client_metadata JSONB NOT NULL DEFAULT '{}',
                     is_important BOOLEAN,
@@ -47,7 +53,46 @@ class PostgresClient:
                     processed_at TIMESTAMPTZ
                 )
             """)
+            # `CREATE TABLE IF NOT EXISTS` does not upgrade a running dev DB.
+            for statement in (
+                "ALTER TABLE raw_events ADD COLUMN IF NOT EXISTS subject_scope TEXT NOT NULL DEFAULT 'user'",
+                "ALTER TABLE raw_events ADD COLUMN IF NOT EXISTS surface TEXT NOT NULL DEFAULT 'unknown'",
+                "ALTER TABLE raw_events ADD COLUMN IF NOT EXISTS locale TEXT NOT NULL DEFAULT 'und'",
+                "ALTER TABLE raw_events ADD COLUMN IF NOT EXISTS consent_state TEXT NOT NULL DEFAULT 'pending'",
+                "ALTER TABLE raw_events ADD COLUMN IF NOT EXISTS source_event_id TEXT",
+                "ALTER TABLE raw_events ADD COLUMN IF NOT EXISTS idempotency_key TEXT",
+            ):
+                await conn.execute(statement)
+            await conn.execute("UPDATE raw_events SET idempotency_key = event_id::text WHERE idempotency_key IS NULL")
+            await conn.execute("ALTER TABLE raw_events ALTER COLUMN idempotency_key SET NOT NULL")
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_raw_events_user_id ON raw_events (user_id)")
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS raw_events_user_idempotency_key "
+                "ON raw_events (user_id, idempotency_key)"
+            )
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS memory_decisions (
+                    id BIGSERIAL PRIMARY KEY,
+                    event_id UUID NOT NULL REFERENCES raw_events(event_id),
+                    memory_class TEXT NOT NULL,
+                    retain_as_memory BOOLEAN NOT NULL,
+                    confidence DOUBLE PRECISION NOT NULL,
+                    policy_class TEXT NOT NULL,
+                    summary TEXT,
+                    entities JSONB NOT NULL DEFAULT '{}',
+                    semantic_key TEXT,
+                    source_event_ids UUID[] NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+            """)
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS memory_decisions_event_id_idx "
+                "ON memory_decisions(event_id)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS retained_memory_semantic_key_idx "
+                "ON memory_decisions(semantic_key) WHERE retain_as_memory"
+            )
 
     async def _ensure_account_schema(self) -> None:
         """Create the small account store used by the authentication API.
