@@ -146,48 +146,48 @@ MERGE (al5)-[:CONTAINS]->(t12);
 // -- Artist -[:PERFORMED]-> Track -----------------------------------------------------
 WITH 1 AS _
 MATCH (ar1:Artist {artist_id: 'artist_001'}), (t1:Track {track_id: 'track_001'})
-MERGE (ar1)-[:PERFORMED]->(t1);
+MERGE (t1)-[:BY]->(ar1);
 
 WITH 1 AS _
 MATCH (ar1:Artist {artist_id: 'artist_001'}), (t2:Track {track_id: 'track_002'})
-MERGE (ar1)-[:PERFORMED]->(t2);
+MERGE (t2)-[:BY]->(ar1);
 
 WITH 1 AS _
 MATCH (ar1:Artist {artist_id: 'artist_001'}), (t6:Track {track_id: 'track_006'})
-MERGE (ar1)-[:PERFORMED]->(t6);
+MERGE (t6)-[:BY]->(ar1);
 
 WITH 1 AS _
 MATCH (ar1:Artist {artist_id: 'artist_001'}), (t7:Track {track_id: 'track_007'})
-MERGE (ar1)-[:PERFORMED]->(t7);
+MERGE (t7)-[:BY]->(ar1);
 
 WITH 1 AS _
 MATCH (ar2:Artist {artist_id: 'artist_002'}), (t3:Track {track_id: 'track_003'})
-MERGE (ar2)-[:PERFORMED]->(t3);
+MERGE (t3)-[:BY]->(ar2);
 
 WITH 1 AS _
 MATCH (ar2:Artist {artist_id: 'artist_002'}), (t4:Track {track_id: 'track_004'})
-MERGE (ar2)-[:PERFORMED]->(t4);
+MERGE (t4)-[:BY]->(ar2);
 
 WITH 1 AS _
 MATCH (ar2:Artist {artist_id: 'artist_002'}), (t5:Track {track_id: 'track_005'})
-MERGE (ar2)-[:PERFORMED]->(t5);
+MERGE (t5)-[:BY]->(ar2);
 
 WITH 1 AS _
 MATCH (ar3:Artist {artist_id: 'artist_003'}), (t8:Track {track_id: 'track_008'})
-MERGE (ar3)-[:PERFORMED]->(t8);
+MERGE (t8)-[:BY]->(ar3);
 
 WITH 1 AS _
 MATCH (ar3:Artist {artist_id: 'artist_003'}), (t9:Track {track_id: 'track_009'})
-MERGE (ar3)-[:PERFORMED]->(t9);
+MERGE (t9)-[:BY]->(ar3);
 
 WITH 1 AS _
 MATCH (ar4:Artist {artist_id: 'artist_004'}), (t10:Track {track_id: 'track_010'})
-MERGE (ar4)-[:PERFORMED]->(t10);
+MERGE (t10)-[:BY]->(ar4);
 
 WITH 1 AS _
 MATCH (ar4:Artist {artist_id: 'artist_004'}), (t11:Track {track_id: 'track_011'})
-MERGE (ar4)-[:PERFORMED]->(t11);
+MERGE (t11)-[:BY]->(ar4);
 
 WITH 1 AS _
 MATCH (ar4:Artist {artist_id: 'artist_004'}), (t12:Track {track_id: 'track_012'})
-MERGE (ar4)-[:PERFORMED]->(t12);
+MERGE (t12)-[:BY]->(ar4);

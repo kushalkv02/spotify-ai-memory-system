@@ -32,6 +32,20 @@ def register(mcp: FastMCP, adapter: GraphAdapter) -> None:
         return to_text(adapter.recommend_by_mood(user_id, limit=limit))
 
     @mcp.tool()
+    def structured_recommendation_reply(
+        user_id: str, intent: str = "", genre: str | None = None, limit: int = 3
+    ) -> str:
+        """
+        Build a Claude-ready structured reply with an opening prompt,
+        music recommendations, and recommendation reasonings.
+        """
+        return to_text(
+            adapter.structured_recommendation_reply(
+                user_id=user_id, intent=intent, genre=genre, limit=limit
+            )
+        )
+
+    @mcp.tool()
     def listening_timeline(user_id: str, days: int = 30) -> str:
         """Return a timeline of the user's listening history."""
         return to_text(adapter.listening_timeline(user_id, days=days))

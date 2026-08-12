@@ -25,6 +25,7 @@ class MemoryExtractor:
     def extract(
         self, event: RawEventRecord, model_output: StructuredMemoryOutput | None = None
     ) -> ExtractedMemory:
+        print(f"Extracting memory from event {event.event_id} (user: {event.user_id}, category: {event.category})")
         entities = self._resolve_entities(event.payload)
         memory_class, summary = self._classify(event, entities)
         strength, factors = self._strength(event, memory_class, entities)
@@ -66,6 +67,11 @@ class MemoryExtractor:
         message = str(payload.get("message") or payload.get("statement") or "").strip()
         subject = self._subject(entities, payload)
 
+        # These reverse a stateful preference; they are not negative
+        # preferences.  The orchestrator expires the corresponding retained
+        # like/follow memory instead of creating a new exclusion memory.
+        if action in {"unlike", "unfollow_artist"}:
+            return MemoryClass.NON_MEMORY, None
         if payload.get("sentiment") == "dislike" or action in {PlaybackAction.DISLIKE.value, "unfollow_artist"} or re.search(r"\b(never|avoid|don't play)\b", message, re.I):
             return MemoryClass.EXCLUSION, f"User excludes {subject}."
         if self._CORRECTION.search(message) and message:

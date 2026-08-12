@@ -32,6 +32,9 @@ class Memory:
     negative_feedback: float = 0.0
     surface_policy: str = "default"
     source_event_id: str | None = None
+    source_action: str | None = None
+    entity_type: str | None = None
+    entity_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

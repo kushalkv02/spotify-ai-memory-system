@@ -105,6 +105,7 @@ class GraphService:
         Idempotent — liking an already-liked track just refreshes the
         timestamp rather than erroring or duplicating the edge.
         """
+        print(f"User {user_id} liking track {track_id} (artist: {artist_id}) at {occurred_at}")
         if user_display_name:
             self.ensure_user(user_id, user_display_name)
         if track_title:

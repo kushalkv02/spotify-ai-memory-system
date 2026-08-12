@@ -116,6 +116,54 @@ class TestGraphAdapter:
         assert res == {"user_id": "u1", "track_id": "t1", "liked": False}
         adapter.graph.unlike_track.assert_called_once_with(user_id="u1", track_id="t1")
 
+    def test_structured_recommendation_reply(self, adapter):
+        adapter.preference.get_preferences.return_value = [
+            {"kind": "genre", "sentiment": "like", "value": "indie"}
+        ]
+        adapter.reasoning.get_recent_plays.return_value = [
+            {"track_id": "played_1", "title": "Recent Song", "genre": "indie"}
+        ]
+        adapter.reasoning.get_recent_skips.return_value = []
+        adapter.memory.retrieve.return_value = [
+            {"summary": "User likes indie music", "strength": 0.8}
+        ]
+        adapter.recommendation.by_genre_affinity.return_value = [
+            {"track_id": "t1", "title": "Song One", "artist": "Artist One", "genre": "indie"}
+        ]
+        adapter.recommendation.by_artist_affinity.return_value = [
+            {"track_id": "t2", "title": "Song Two", "artist": "Artist Two"}
+        ]
+        adapter.recommendation.collaborative.return_value = [
+            {"track_id": "t1", "title": "Song One", "artist": "Artist One"}
+        ]
+        adapter.recommendation.by_mood.return_value = []
+        adapter.explanation.explain_recommendations.return_value = "Recommended using your saved indie preference."
+
+        result = adapter.structured_recommendation_reply("u1", intent="recommend indie", limit=3)
+
+        assert result["reply_framework"]["music_recommendations_heading"] == "music recommendations -"
+        assert result["reply_framework"]["reasonings_heading"] == "reasonings -"
+        assert "I've got indie saved!" in result["reply_markdown"]
+        assert "music recommendations -" in result["reply_markdown"]
+        assert "reasonings -" in result["reply_markdown"]
+        assert result["music_recommendations"] == [
+            {
+                "track_id": "t1",
+                "title": "Song One",
+                "artist": "Artist One",
+                "genre": "indie",
+                "mood": None,
+            },
+            {
+                "track_id": "t2",
+                "title": "Song Two",
+                "artist": "Artist Two",
+                "genre": None,
+                "mood": None,
+            },
+        ]
+        assert result["reasonings"] == ["Recommended using your saved indie preference."]
+
     def test_get_graph_adapter_singleton(self, mock_neo4j_driver):
         a1 = get_graph_adapter()
         a2 = get_graph_adapter()

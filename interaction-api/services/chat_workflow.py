@@ -30,6 +30,7 @@ class ChatWorkflowState(TypedDict, total=False):
     memory_context: list[dict[str, Any]]
     preference_context: list[dict[str, Any]]
     reasoning_context: list[dict[str, Any]]
+    explanation_context: str
     graph_evidence_used: bool
     gemini_recommendation_used: bool
     recommended: list[dict[str, Any]]
@@ -78,6 +79,7 @@ class ChatRecommendationWorkflow:
         return {"turn": turn, "signals": list(unique.values())}
 
     async def persist(self, state: ChatWorkflowState) -> dict[str, Any]:
+        print(f"Persisting {len(state['signals'])} preference signals for user {state['user_id']}")
         event = await self.orchestrator.ingest(
             EventEnvelope(
                 user_id=state["user_id"], category=EventCategory.CHAT,
@@ -92,6 +94,7 @@ class ChatRecommendationWorkflow:
         return {"event": event}
 
     async def project_preferences(self, state: ChatWorkflowState) -> dict[str, Any]:
+        print(f"Projecting {len(state['signals'])} preference signals for user {state['user_id']} (event: {state['event'].event_id})")
         memory_strength = float(state["event"].importance_score or 0.0)
         weighted_signals = [
             signal.model_copy(update={"strength": round(signal.strength * memory_strength, 3)})
@@ -119,6 +122,7 @@ class ChatRecommendationWorkflow:
             "memory_context": memory_context,
             "preference_context": evidence["preference_context"],
             "reasoning_context": evidence["reasoning_context"],
+            "explanation_context": evidence.get("explanation_context", ""),
             "graph_evidence_used": True,
         }
 
@@ -131,18 +135,27 @@ class ChatRecommendationWorkflow:
             preferences=state["preference_context"],
             graph_recommendations=state["graph_recommendations"],
             reasoning=state["reasoning_context"],
+            explanation_context=state.get("explanation_context", ""),
             intent=state["content"],
         )
         by_id = {track["id"]: track for track in candidates}
         recommended = [by_id[track_id] for track_id in plan.track_ids if track_id in by_id]
+        rationale = plan.rationale
+        if not plan.used_gemini:
+            rationale = await self.graph_client.fallback_explanation(
+                recommendations=recommended, preferences=state["preference_context"],
+                reasoning=state["reasoning_context"], user_id=state["user_id"],
+            )
+        print(f"Recommendation plan: {plan.track_ids} (used Gemini: {plan.used_gemini})")
         return {
             "recommended": recommended,
-            "recommendation_reason": plan.rationale,
+            "recommendation_reason": rationale,
             "gemini_recommendation_used": plan.used_gemini,
         }
 
     @staticmethod
     async def compose_reply(state: ChatWorkflowState) -> dict[str, Any]:
+        print(f"Composing reply for {len(state['recommended'])} recommended tracks (Gemini used: {state['gemini_recommendation_used']})")
         reply = state["turn"].reply
         if state["signals"] and state["recommended"]:
             reply += "\n\nTry: " + ", ".join(

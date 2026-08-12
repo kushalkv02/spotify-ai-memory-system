@@ -96,6 +96,7 @@ Latest listener message: {content}
         graph_recommendations: list[dict[str, Any]],
         reasoning: list[dict[str, Any]],
         intent: str,
+        explanation_context: str = "",
     ) -> RecommendationPlan:
         """Let Gemini select only from candidates ranked by the deterministic engine.
 
@@ -117,6 +118,7 @@ Latest listener message: {content}
                 graph_recommendations,
                 reasoning,
                 intent,
+                explanation_context,
             )
         except Exception:
             return fallback
@@ -129,6 +131,7 @@ Latest listener message: {content}
         graph_recommendations: list[dict[str, Any]],
         reasoning: list[dict[str, Any]],
         intent: str,
+        explanation_context: str = "",
     ) -> RecommendationPlan:
         from google.genai import types
 
@@ -172,6 +175,8 @@ Graph-native recommendation results:
 {graph_recommendation_text}
 Graph listening timeline:
 {reasoning_text}
+Deterministic explanation evidence:
+{explanation_context or "No specific explanation evidence available."}
 Candidates:
 {candidate_text}
 """,

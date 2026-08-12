@@ -49,7 +49,15 @@ from .tools import (
     user_tools,
 )
 
-mcp = FastMCP(mcp_config.server_name)
+mcp = FastMCP(
+    mcp_config.server_name,
+    host=mcp_config.host,
+    port=mcp_config.port,
+    streamable_http_path=mcp_config.streamable_http_path,
+    sse_path=mcp_config.sse_path,
+    message_path=mcp_config.message_path,
+    stateless_http=mcp_config.stateless_http,
+)
 adapter = get_graph_adapter()
 
 # -- register every tool/resource module against the shared mcp + adapter --
@@ -64,6 +72,12 @@ user_resources.register(mcp, adapter)
 
 
 def main() -> None:
+    """Run for either a local stdio host or a URL-based external host.
+
+    ``streamable-http`` exposes the MCP endpoint at ``/mcp`` by default and
+    is the preferred transport for Claude and other remote MCP clients.
+    ``stdio`` remains unchanged for a local subprocess configuration.
+    """
     mcp.run(transport=mcp_config.transport)
 
 

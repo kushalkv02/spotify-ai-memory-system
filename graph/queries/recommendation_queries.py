@@ -9,8 +9,8 @@ LIMIT $limit
 """
 
 ARTIST_AFFINITY_QUERY = """
-MATCH (me:User {user_id: $user_id})-[:PLAYED]->(:Track)<-[:BY]-(ar:Artist)
-MATCH (ar)-[:PERFORMED]->(rec:Track)
+MATCH (me:User {user_id: $user_id})-[:PLAYED]->(:Track)-[:BY]->(ar:Artist)
+MATCH (rec:Track)-[:BY]->(ar:Artist)
 WHERE NOT (me)-[:PLAYED]->(rec)
 RETURN rec.track_id AS track_id, rec.title AS title, ar.name AS artist,
        count(*) AS affinity

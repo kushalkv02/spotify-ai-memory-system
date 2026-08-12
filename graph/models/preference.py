@@ -19,3 +19,5 @@ class Preference:
         data = asdict(self)
         data["updated_at"] = self.updated_at.isoformat()
         return data
+
+

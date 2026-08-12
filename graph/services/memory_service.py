@@ -37,6 +37,8 @@ class MemoryService:
         source_event_id: str | None = None, source: str = "user", confidence: float = 1.0,
         subject_scope: str = "user", explicitness: float = 0.0,
         surface_policy: str = "default", valid_from: datetime | None = None,
+        source_action: str | None = None, entity_type: str | None = None,
+        entity_id: str | None = None,
     ) -> dict[str, Any]:
         if not 0 <= confidence <= 1 or not 0 <= explicitness <= 1:
             raise ValueError("confidence and explicitness must be between 0 and 1")
@@ -53,6 +55,7 @@ class MemoryService:
             valid_from=when, recorded_at=datetime.now(timezone.utc), source=source,
             confidence=confidence, subject_scope=subject_scope, explicitness=explicitness,
             surface_policy=surface_policy, source_event_id=source_event_id,
+            source_action=source_action, entity_type=entity_type, entity_id=entity_id,
         )
         return self.repo.create_memory(memory)
 
@@ -78,6 +81,9 @@ class MemoryService:
 
     def expire_memory(self, user_id: str, version_id: str, subject_scope: str = "user") -> bool:
         return self.repo.expire_memory(version_id, user_id, subject_scope)
+
+    def expire_state_memories(self, user_id: str, *, entity_type: str, entity_id: str) -> int:
+        return self.repo.expire_state_memories(user_id, entity_type, entity_id)
 
     def store_embedding(self, user_id: str, version_id: str, embedding: Iterable[float], *, field: str = "summary", subject_scope: str = "user") -> None:
         self.repo.store_embedding(version_id, user_id, embedding, field, subject_scope)

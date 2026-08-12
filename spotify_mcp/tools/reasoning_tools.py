@@ -27,3 +27,8 @@ def register(mcp: FastMCP, adapter: GraphAdapter) -> None:
     def get_user_preferences(user_id: str) -> str:
         """Get a user's derived preferences (genre/artist/mood affinities)."""
         return to_text(adapter.get_preferences(user_id))
+
+    @mcp.tool()
+    def explain_recommendations(user_id: str, limit: int = 10) -> str:
+        """Explain graph-native recommendations using shared listeners and artist history."""
+        return to_text(adapter.explain_recommendations(user_id, limit=limit))

@@ -134,6 +134,35 @@ class MemoryRepository(BaseRepository):
         )
         return bool(result)
 
+    def expire_state_memories(self, user_id: str, entity_type: str, entity_id: str, subject_scope: str = "user") -> int:
+        """Close memories created by a reversible like/follow state action."""
+        self._validate_scope(user_id, subject_scope)
+        if entity_type not in {"track", "artist"} or not entity_id:
+            raise ValueError("a canonical track or artist entity is required")
+        result = self.client.execute_write(
+            """
+            MATCH (:User {user_id: $user_id})-[:HAS_MEMORY]->(m:Memory {user_id: $user_id, subject_scope: $subject_scope})
+            WHERE m.status IN ['active', 'corrected']
+              AND (
+                  (m.entity_type = $entity_type AND m.entity_id = $entity_id
+                   AND m.source_action IN ['like', 'follow_artist'])
+                  OR (
+                      m.source IN ['event:playback', 'event:ui_action']
+                      AND m.summary CONTAINS $entity_id
+                      AND (
+                          $entity_type = 'artist'
+                          OR EXISTS { MATCH (m)-[:REFERENCES]->(:Track {track_id: $entity_id}) }
+                      )
+                  )
+              )
+            SET m.status = 'expired', m.valid_to = $now
+            RETURN count(m) AS expired_count
+            """,
+            {"user_id": user_id, "subject_scope": subject_scope, "entity_type": entity_type,
+             "entity_id": entity_id, "now": self._now()},
+        )
+        return int(result[0]["expired_count"]) if result else 0
+
     def get_recent_for_user(self, user_id: str, limit: int = 20, subject_scope: str = "user") -> list[dict[str, Any]]:
         self._validate_scope(user_id, subject_scope)
         query = """

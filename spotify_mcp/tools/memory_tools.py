@@ -26,6 +26,7 @@ def register(mcp: FastMCP, adapter: GraphAdapter) -> None:
     @mcp.tool()
     def get_recent_memories(user_id: str, limit: int = 20) -> str:
         """Get a user's most recent memories, most recent first."""
+        print(f"Retrieving {limit} recent memories for user {user_id}")
         return to_text(adapter.recent_memories(user_id, limit=limit))
 
     @mcp.tool()

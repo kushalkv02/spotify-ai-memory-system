@@ -70,8 +70,7 @@ class PlaybackRepository:
     def get_recent_plays(self, user_id: str, limit: int = 20) -> list[dict[str, Any]]:
         query = """
         MATCH (u:User {user_id: $user_id})-[r:PLAYED]->(t:Track)
-        RETURN t.track_id AS track_id, t.title AS title, r.played_at AS played_at,
-               r.ms_played AS ms_played, r.context AS context
+        RETURN t.track_id AS track_id, t.title AS title, r.played_at AS played_at, r.context AS context
         ORDER BY r.played_at DESC
         LIMIT $limit
         """

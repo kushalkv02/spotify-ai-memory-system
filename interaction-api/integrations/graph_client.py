@@ -44,6 +44,7 @@ try:
     from graph.services.preference_service import PreferenceService as GraphPreferenceService
     from graph.services.recommendation_service import RecommendationService as GraphRecommendationService
     from graph.services.reasoning_service import ReasoningService as GraphReasoningService
+    from graph.services.explanation_service import ExplanationService as GraphExplanationService
     from graph.neo4j_client import Neo4jClient
 
     _graph_available = True
@@ -75,6 +76,7 @@ class GraphClient:
             self._preference_service = GraphPreferenceService()
             self._recommendation_service = GraphRecommendationService()
             self._reasoning_service = GraphReasoningService()
+            self._explanation_service = GraphExplanationService()
 
     async def record_interaction(self, event: RawEventRecord) -> None:
         """Write a raw interaction into the graph (e.g. (:User)-[:PERFORMED]->(:Interaction)).
@@ -85,7 +87,6 @@ class GraphClient:
         if not self.enabled:
             return
         try:
-            # TODO: replace with your actual method, e.g.:
             await self._interaction_service.handle_event(
                 user_id=event.user_id,
                 category=event.category,
@@ -119,10 +120,53 @@ class GraphClient:
                 confidence=event.importance_score or 0.5,
                 explicitness=1.0 if event.payload.get("explicit_preference") else 0.0,
                 subject_scope=event.subject_scope,
+                source_action=event.payload.get("action") or event.payload.get("action_type"),
+                entity_type=("track" if event.payload.get("track_id") else "artist" if event.payload.get("artist_id") else None),
+                entity_id=event.payload.get("track_id") or event.payload.get("artist_id"),
             )
         except Exception as exc:
             logger.error("Graph writeback (create_memory) failed: %s", exc)
             raise GraphWritebackError(str(exc)) from exc
+
+    async def remove_state_memories(self, event: RawEventRecord) -> int:
+        """Expire retrievable memories created by a reversed state action."""
+        if not self.enabled:
+            return 0
+        action = event.payload.get("action") or event.payload.get("action_type")
+        entity_type = "track" if action == "unlike" else "artist" if action == "unfollow_artist" else None
+        entity_id = event.payload.get("track_id") or event.payload.get("artist_id")
+        if not entity_type or not entity_id:
+            return 0
+        try:
+            return await asyncio.to_thread(
+                self._memory_service.expire_state_memories,
+                event.user_id, entity_type=entity_type, entity_id=str(entity_id),
+            )
+        except Exception as exc:
+            logger.error("Graph writeback (remove_state_memories) failed: %s", exc)
+            raise GraphWritebackError(str(exc)) from exc
+
+    async def fallback_explanation(
+        self, *, recommendations: list[dict[str, Any]], preferences: list[dict[str, Any]],
+        reasoning: list[dict[str, Any]], user_id: str,
+    ) -> str:
+        """Use deterministic graph explanations when Gemini cannot respond."""
+        recent_plays = reasoning
+        recent_skips: list[dict[str, Any]] = []
+        if not self.enabled:
+            return "Recommended from the highest-ranked available tracks."
+        try:
+            recent_plays, recent_skips = await asyncio.gather(
+                asyncio.to_thread(self._reasoning_service.get_recent_plays, user_id, 20),
+                asyncio.to_thread(self._reasoning_service.get_recent_skips, user_id, 20),
+            )
+        except Exception as exc:
+            logger.warning("Detailed reasoning evidence unavailable for fallback: %s", exc)
+        
+        return self._explanation_service.explain_recommendations(
+            recommendations=recommendations, preferences=preferences,
+            recent_plays=recent_plays, recent_skips=recent_skips,
+        )
 
     async def update_preferences_from_event(self, event: RawEventRecord) -> None:
         """Update (:User)-[:PREFERS]->(:Artist|:Genre) style edges from
@@ -196,7 +240,7 @@ class GraphClient:
         self, user_id: str, intent: str, *, recommendation_limit: int = 12,
         memory_limit: int = 6, preference_limit: int = 12, reasoning_days: int = 30,
         reasoning_limit: int = 12,
-    ) -> dict[str, list[dict[str, Any]]]:
+    ) -> dict[str, Any]:
         """Read all Neo4j evidence required for a Gemini recommendation turn.
 
         Unlike the individual best-effort helpers, this is deliberately
@@ -227,7 +271,7 @@ class GraphClient:
         self, user_id: str, intent: str, recommendation_limit: int,
         memory_limit: int, preference_limit: int, reasoning_days: int,
         reasoning_limit: int,
-    ) -> dict[str, list[dict[str, Any]]]:
+    ) -> dict[str, Any]:
         recommendation_results: list[dict[str, Any]] = []
         for strategy in (
             self._recommendation_service.collaborative,
@@ -245,6 +289,11 @@ class GraphClient:
         )
         preferences = self._preference_service.get_preferences(user_id)
         reasoning = self._reasoning_service.listening_timeline(user_id, days=reasoning_days)
+        explanation = self._explanation_service.explain_recommendations(
+            recommendations=list(unique_recommendations.values())[:recommendation_limit],
+            preferences=[item for item in preferences[:preference_limit] if item.get("value")],
+            recent_plays=reasoning[:reasoning_limit], recent_skips=[],
+        )
         return {
             "graph_recommendations": list(unique_recommendations.values())[:recommendation_limit],
             "memory_context": [
@@ -266,6 +315,7 @@ class GraphClient:
                 if item.get("value")
             ],
             "reasoning_context": reasoning[:reasoning_limit],
+            "explanation_context": explanation,
         }
 
     async def memory_context_for_recommendations(self, user_id: str, intent: str, limit: int = 6) -> list[dict[str, Any]]:

@@ -55,6 +55,9 @@ class InteractionOrchestrator:
 
         try:
             await self.graph_client.record_interaction(record)
+            action = record.payload.get("action") or record.payload.get("action_type")
+            if action in {"unlike", "unfollow_artist"}:
+                await self.graph_client.remove_state_memories(record)
             if decision.memory_class.value in {"explicit_preference", "exclusion", "correction"}:
                 await self.graph_client.update_preferences_from_event(record)
             if decision.retain_as_memory and is_new_memory and decision.summary:
