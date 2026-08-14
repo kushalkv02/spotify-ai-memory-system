@@ -6,7 +6,8 @@ heuristic strategies:
 
 - `collaborative`: tracks played by listeners with overlapping play history.
 - `by_artist_affinity`: unplayed tracks by artists the user has already played.
-- `by_genre_affinity`: unplayed tracks in genres the user has already played.
+- `by_genre_affinity`: unplayed tracks in genres the user has played or
+  explicitly marked as liked.
 
 All three exclude tracks the target user has already played. An unknown user,
 or a user without enough history for a strategy, returns an empty list.

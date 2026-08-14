@@ -7,6 +7,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from graph.services.graph_service import GraphService, get_graph_service
+from graph.services.recommendation_service import RecommendationService
+from graph.queries.recommendation_queries import GENRE_AFFINITY_QUERY
 
 
 class TestGraphService:
@@ -94,3 +96,21 @@ class TestGraphService:
         srv1 = get_graph_service()
         srv2 = get_graph_service()
         assert srv1 is srv2
+
+
+class TestRecommendationService:
+    def test_genre_affinity_uses_explicit_liked_genres(self, mock_neo4j_driver):
+        service = RecommendationService()
+        service.client.execute_read.return_value = [
+            {"track_id": "track-electronic", "title": "Midnight Circuit", "genre": "Electronic"}
+        ]
+
+        result = service.by_genre_affinity("u1", limit=3)
+
+        assert result[0]["genre"] == "Electronic"
+        service.client.execute_read.assert_called_once_with(
+            GENRE_AFFINITY_QUERY, {"user_id": "u1", "limit": 3}
+        )
+        assert "[:HAS_PREFERENCE]->(preference:Preference)" in GENRE_AFFINITY_QUERY
+        assert "preference.sentiment = 'like'" in GENRE_AFFINITY_QUERY
+        assert "NOT EXISTS" in GENRE_AFFINITY_QUERY

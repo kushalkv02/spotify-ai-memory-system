@@ -23,7 +23,7 @@ def register(mcp: FastMCP, adapter: GraphAdapter) -> None:
 
     @mcp.tool()
     def recommend_by_genre_affinity(user_id: str, limit: int = 10) -> str:
-        """Recommend unplayed tracks from genres the user plays most often."""
+        """Recommend unplayed tracks from played or explicitly liked genres."""
         return to_text(adapter.recommend_by_genre(user_id, limit=limit))
 
     @mcp.tool()

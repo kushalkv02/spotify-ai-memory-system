@@ -34,7 +34,7 @@ class RecommendationService:
         )
 
     def by_genre_affinity(self, user_id: str, limit: int = 10) -> list[dict[str, Any]]:
-        """Recommend unplayed tracks from genres present in the user's history."""
+        """Recommend unplayed tracks from played or explicitly liked genres."""
         return self.client.execute_read(
             GENRE_AFFINITY_QUERY, {"user_id": user_id, "limit": limit}
         )
