@@ -15,7 +15,7 @@ Event Validation Layer
 PostgreSQL (Raw Immutable Events)
      │
      ▼
-Memory Decision Engine  (naive inline placeholder — see orchestrator.py)
+Memory Decision Engine  
      │
      └─→ writes through to the `graph` package (Neo4j), which `spotify_mcp`
          already reads from via its own graph_adapter/tools.
