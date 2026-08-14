@@ -21,6 +21,10 @@ deterministic and persisted.
 - [Configuration](#configuration)
 - [Running the services](#running-the-services)
 - [API overview](#api-overview)
+<<<<<<< HEAD
+- [Langgraph automation](#langgraph-automation)
+=======
+>>>>>>> 56e6d0d (readme commit)
 - [Memory and recommendation behavior](#memory-and-recommendation-behavior)
 - [MCP server](#mcp-server)
 - [Development, tests, and troubleshooting](#development-tests-and-troubleshooting)
@@ -312,6 +316,137 @@ Chat responses include extracted `preferencesSaved`, `trackRefs`, whether the
 memory was retained, and whether Gemini or the deterministic fallback ranked
 the recommendations.
 
+<<<<<<< HEAD
+## Langgraph Automation
+
+### LangGraph automation
+
+LangGraph acts as the orchestration layer of the conversational recommendation system. The workflow maintains a shared state containing the user's identity, email, question, extracted entities, retrieved memories, Spotify data, and final answer.
+
+The workflow first identifies the current user and extracts relevant entities and intent from the question. It then retrieves recent structured memories from Neo4j and performs semantic-memory retrieval from ChromaDB using Gemini embeddings.
+
+Based on the retrieved context and the user's request, the workflow conditionally determines whether memory-based reasoning or Spotify catalog search is required. When catalog information is required, the workflow invokes the search_tracks capability through the Spotify MCP server.
+
+Finally, the retrieved memory and Spotify context are passed to the Gemini LLM to generate the final response, which is returned through FastAPI to the Vue.js chat interface.
+
+ChromaDB provides semantic memory retrieval. User memories are represented as embeddings, allowing the system to retrieve memories based on semantic similarity rather than requiring an exact keyword match. The retrieved semantic memories are combined with recent structured memories from Neo4j before recommendation generation.
+
+`services/chat_workflow.py` is the orchestrator for every `POST /chat/messages`
+request. It keeps the existing Postgres/Neo4j services as the systems of
+record, while LangGraph controls the order and state passed between stages:
+
+```mermaid
+flowchart LR
+  A[understand\nGemini + fallback] --> B[persist\nEvent + memory pipeline]
+  B --> C[project_preferences\nNeo4j + UI projection]
+  C --> D[recommend\nGraph + local ranker]
+  D --> E[compose_reply]
+```
+
+This is deliberately a per-turn workflow without a LangGraph checkpoint:
+conversation and memory durability remain in the project’s existing Postgres
+and Neo4j data model. Add a LangGraph checkpointer later only if you need
+interrupt/resume or human approval between these nodes.
+
+                         ┌──────────────────────┐
+                         │      Vue.js UI       │
+                         │  Chat + Auth + Player│
+                         └──────────┬───────────┘
+                                    │
+                                    │ POST /chat/messages
+                                    ▼
+                         ┌──────────────────────┐
+                         │   FastAPI Backend    │
+                         │ chat_workflow.py     │
+                         └──────────┬───────────┘
+                                    │
+                                    ▼
+                    ┌──────────────────────────────┐
+                    │        LangGraph             │
+                    │       ChatRecommendation     |
+                    |                Workflow      │
+                    └──────────────┬───────────────┘
+                                   │
+             ┌─────────────────────┴─────────────────────┐
+             │                                           │
+             ▼                                           ▼
+     ┌────────────────────┐                     ┌────────────────────┐
+     │ Node 1             │                     │ Shared State       │
+     │ User Identification│───────────────────▶️│ user_id            │
+     │ by email           │                     │ email              │
+     └─────────┬──────────┘                     │ question           │
+               │                                │ entities           │
+               ▼                                │ memories           │
+     ┌────────────────────┐                     │ spotify_data       │
+     │ Node 2             │                     │ answer             │
+     │ Entity Extraction  │                     └────────────────────┘
+     │ / Intent Analysis  │
+     └─────────┬──────────┘
+             │
+             ▼
+     ┌────────────────────┐
+     │ Node 3             │
+     │ Recent Memory      │
+     │ Retrieval          │
+     │                    │
+     │ Neo4j              │
+     └─────────┬──────────┘
+               │
+               ▼
+     ┌────────────────────┐
+     │ Node 4             │
+     │ Semantic Memory    │
+     │ Retrieval          │
+     │                    │
+     │ ChromaDB           │
+     │ + Gemini Embedding │
+     └─────────┬──────────┘
+               │
+               ▼
+          ┌─────────────┐
+          │ Conditional │
+          │ Decision    │
+          └──────┬──────┘
+                 │
+         ┌───────┴────────┐
+         │                │
+         ▼                ▼
+     Memory-based       Catalog/
+     recommendation     Spotify search
+           │                │
+           │                ▼
+           │       ┌──────────────────┐
+           │       │ Spotify MCP      │
+           │       │ search_tracks    │
+           │       └────────┬─────────┘
+           │                │
+           └────────┬───────┘
+                    ▼
+          ┌────────────────────┐
+          │ Recommendation /   │
+          │ Response Generation│
+          │                    │
+          │ Gemini LLM         │
+          └──────────┬─────────┘
+                     │
+                     ▼
+            ┌──────────────────┐
+            │ Final Answer     │
+            │ state["answer"]  │
+            └────────┬─────────┘
+                     │
+                     ▼
+            ┌──────────────────┐
+            │ FastAPI Response │
+            └────────┬─────────┘
+                     │
+                     ▼
+            ┌──────────────────┐
+            │ Vue Chat UI      │
+            └──────────────────┘
+
+=======
+>>>>>>> 56e6d0d (readme commit)
 ## Memory and recommendation behavior
 
 ### Storage responsibilities
@@ -322,6 +457,29 @@ the recommendations.
 | Neo4j | Music catalog, listener state, event relationships, preferences, versioned memories | Traversal, reasoning, personalized retrieval |
 | In-memory client state | Small starter catalog, current UI projections, local ranking state | Responsive demo/client experience |
 
+<<<<<<< HEAD
+### Memory Architecture: 
+                   USER QUESTION
+                         │
+             ┌───────────┴───────────┐
+             ▼                       ▼
+          Neo4j                   ChromaDB
+       Structured               Semantic
+        Memory                  Memory
+             │                       │
+             │                       │
+      recent memories        embedding similarity
+             │                       │
+             └───────────┬───────────┘
+                         ▼
+                  Combined Memories
+                         │
+                         ▼
+                  Recommendation
+                    Generation
+
+=======
+>>>>>>> 56e6d0d (readme commit)
 ### Event/state semantics
 
 - Plays and skips create a new `PLAYED` or `SKIPPED` relationship every time,
@@ -446,3 +604,4 @@ python -c 'import asyncio; from spotify_mcp.server import mcp; asyncio.run(mcp.l
 - [`interaction-api/README.md`](interaction-api/README.md) — API-focused notes
 - [`client/README.md`](client/README.md) — frontend-focused notes
 - [`spotify_mcp/README.md`](spotify_mcp/README.md) — MCP tool/server reference
+# spotify-ai-memory-system
