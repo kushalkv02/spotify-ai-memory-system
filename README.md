@@ -313,7 +313,6 @@ Chat responses include extracted `preferencesSaved`, `trackRefs`, whether the
 memory was retained, and whether Gemini or the deterministic fallback ranked
 the recommendations.
 
-<<<<<<< HEAD
 ## Langgraph Automation
 
 ### LangGraph automation
@@ -443,7 +442,6 @@ interrupt/resume or human approval between these nodes.
             └──────────────────┘
 
 =======
->>>>>>> 56e6d0d (readme commit)
 ## Memory and recommendation behavior
 
 ### Storage responsibilities
@@ -454,7 +452,6 @@ interrupt/resume or human approval between these nodes.
 | Neo4j | Music catalog, listener state, event relationships, preferences, versioned memories | Traversal, reasoning, personalized retrieval |
 | In-memory client state | Small starter catalog, current UI projections, local ranking state | Responsive demo/client experience |
 
-<<<<<<< HEAD
 ### Memory Architecture: 
                    USER QUESTION
                          │
@@ -475,8 +472,7 @@ interrupt/resume or human approval between these nodes.
                   Recommendation
                     Generation
 
-=======
->>>>>>> 56e6d0d (readme commit)
+
 ### Event/state semantics
 
 - Plays and skips create a new `PLAYED` or `SKIPPED` relationship every time,
