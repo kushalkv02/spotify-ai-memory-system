@@ -589,6 +589,19 @@ python -c 'import asyncio; from spotify_mcp.server import mcp; asyncio.run(mcp.l
 | No recommendations for a new user | The graph strategies need listening evidence. Seed the graph or record plays/preferences first. |
 | MCP server seems idle | Normal with `stdio`: it waits for an MCP client and does not serve a browser page. |
 
+## Example graph database
+
+<img width="2548" height="1428" alt="image" src="https://github.com/user-attachments/assets/9408a6a9-bf31-470a-b22e-fb4fefa73358" />
+
+## Frontend
+
+<img width="2880" height="1638" alt="image" src="https://github.com/user-attachments/assets/9828f9de-3c66-47b8-ba2e-ee3ac8c01671" />
+
+## Example External MCP host response
+
+<img width="2086" height="1054" alt="image" src="https://github.com/user-attachments/assets/481231c2-3ea2-415f-bb32-3fd143072bdc" />
+
+
 ## Further reading
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — full architecture, decision pipeline,
