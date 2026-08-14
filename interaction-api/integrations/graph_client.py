@@ -41,6 +41,7 @@ try:
     # These imports assume spotify-mem-sys/ root is on sys.path (see docstring above).
     from graph.services.interaction_service import InteractionService as GraphInteractionService
     from graph.services.memory_service import MemoryService as GraphMemoryService
+    from graph.services.semantic_memory_service import SemanticMemoryService as GraphSemanticMemoryService
     from graph.services.preference_service import PreferenceService as GraphPreferenceService
     from graph.services.recommendation_service import RecommendationService as GraphRecommendationService
     from graph.services.reasoning_service import ReasoningService as GraphReasoningService
@@ -73,6 +74,7 @@ class GraphClient:
             self._neo4j_client = Neo4jClient()
             self._interaction_service = GraphInteractionService()
             self._memory_service = GraphMemoryService()
+            self._semantic_memory_service = GraphSemanticMemoryService()
             self._preference_service = GraphPreferenceService()
             self._recommendation_service = GraphRecommendationService()
             self._reasoning_service = GraphReasoningService()
@@ -284,9 +286,13 @@ class GraphClient:
             if item.get("track_id"):
                 unique_recommendations.setdefault(item["track_id"], item)
 
-        memories = self._memory_service.retrieve(
-            user_id, intent=intent, surface="chat", limit=memory_limit, context_budget=1200,
+        semantic_memories = self._semantic_memory_service.try_retrieve(
+            user_id, intent, limit=memory_limit,
         )
+        recent_memories = self._memory_service.recent_memories(user_id, limit=memory_limit)
+        # Semantic matches answer the current request; recent Neo4j facts keep
+        # the recommendation grounded in the listener's latest structured state.
+        memories = self._combine_memory_sources(semantic_memories, recent_memories, memory_limit)
         preferences = self._preference_service.get_preferences(user_id)
         reasoning = self._reasoning_service.listening_timeline(user_id, days=reasoning_days)
         explanation = self._explanation_service.explain_recommendations(
@@ -300,7 +306,8 @@ class GraphClient:
                 {
                     "summary": item.get("summary", ""),
                     "strength": round(float(item.get("importance", .5)) * float(item.get("confidence", 1)), 3),
-                    "memory_class": item.get("source", "memory"),
+                    "memory_class": item.get("memory_class", item.get("source", "memory")),
+                    "semantic_score": item.get("semantic_score"),
                 }
                 for item in memories
             ],
@@ -318,19 +325,40 @@ class GraphClient:
             "explanation_context": explanation,
         }
 
+    @staticmethod
+    def _combine_memory_sources(
+        semantic_memories: list[dict[str, Any]], recent_memories: list[dict[str, Any]], limit: int,
+    ) -> list[dict[str, Any]]:
+        """Prioritize intent-relevant vectors while retaining fresh graph facts."""
+        memories: list[dict[str, Any]] = []
+        seen_versions: set[str] = set()
+        for item in [*semantic_memories, *recent_memories]:
+            version_id = str(item.get("version_id", ""))
+            if version_id and version_id in seen_versions:
+                continue
+            if version_id:
+                seen_versions.add(version_id)
+            memories.append(item)
+        # Each source is individually bounded; retain both sources, then cap
+        # the final prompt payload to the combined source budgets.
+        return memories[:limit * 2]
+
     async def memory_context_for_recommendations(self, user_id: str, intent: str, limit: int = 6) -> list[dict[str, Any]]:
-        """Return only scored memory summaries approved for recommendation use."""
+        """Return semantic Chroma matches plus recent structured Neo4j memories."""
         if not self.enabled:
             return []
         try:
-            memories = self._memory_service.retrieve(
-                user_id, intent=intent, surface="chat", limit=limit, context_budget=1200,
+            semantic_memories, recent_memories = await asyncio.gather(
+                asyncio.to_thread(self._semantic_memory_service.try_retrieve, user_id, intent, limit),
+                asyncio.to_thread(self._memory_service.recent_memories, user_id, limit),
             )
+            memories = self._combine_memory_sources(semantic_memories, recent_memories, limit)
             return [
                 {
                     "summary": item.get("summary", ""),
                     "strength": round(float(item.get("importance", .5)) * float(item.get("confidence", 1)), 3),
-                    "memory_class": item.get("source", "memory"),
+                    "memory_class": item.get("memory_class", item.get("source", "memory")),
+                    "semantic_score": item.get("semantic_score"),
                 }
                 for item in memories
             ]

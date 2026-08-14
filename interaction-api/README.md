@@ -88,6 +88,16 @@ catalog-aware deterministic fallback preserves the same flow for local work.
 
 ### LangGraph automation
 
+LangGraph acts as the orchestration layer of the conversational recommendation system. The workflow maintains a shared state containing the user's identity, email, question, extracted entities, retrieved memories, Spotify data, and final answer.
+
+The workflow first identifies the current user and extracts relevant entities and intent from the question. It then retrieves recent structured memories from Neo4j and performs semantic-memory retrieval from ChromaDB using Gemini embeddings.
+
+Based on the retrieved context and the user's request, the workflow conditionally determines whether memory-based reasoning or Spotify catalog search is required. When catalog information is required, the workflow invokes the search_tracks capability through the Spotify MCP server.
+
+Finally, the retrieved memory and Spotify context are passed to the Gemini LLM to generate the final response, which is returned through FastAPI to the Vue.js chat interface.
+
+ChromaDB provides semantic memory retrieval. User memories are represented as embeddings, allowing the system to retrieve memories based on semantic similarity rather than requiring an exact keyword match. The retrieved semantic memories are combined with recent structured memories from Neo4j before recommendation generation.
+
 `services/chat_workflow.py` is the orchestrator for every `POST /chat/messages`
 request. It keeps the existing Postgres/Neo4j services as the systems of
 record, while LangGraph controls the order and state passed between stages:
@@ -124,6 +134,19 @@ Neo4j memory importance/confidence, and scales the preference edge used for
 ranking. Gemini receives only retained memory summaries plus their strengths;
 it may select and explain tracks from the deterministic candidate list, but it
 cannot increase a memory’s strength or bypass exclusions.
+
+### Semantic memory retrieval
+
+Retained memory summaries are also projected into a local ChromaDB collection.
+Chroma creates embeddings for those summaries and retrieves them by semantic
+similarity to the current chat intent, scoped to the requesting user. Before a
+recommendation is generated, those semantic matches are deduplicated and
+combined with the most recent structured Neo4j memories. Neo4j remains the
+authoritative temporal store; expiring or correcting a memory removes its old
+vector projection.
+
+By default Chroma persists under `.chroma/` at the repository root (ignored by
+Git). Set `CHROMA_PERSIST_DIRECTORY` to use a durable deployment volume.
 
 ### 2. Start Postgres and create the table
 

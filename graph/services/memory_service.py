@@ -10,6 +10,7 @@ from typing import Any, Iterable, Protocol
 
 from ..models.memory import Memory
 from ..repositories.memory_repository import MemoryRepository
+from .semantic_memory_service import SemanticMemoryService
 
 
 class EmbeddingProvider(Protocol):
@@ -19,9 +20,10 @@ class EmbeddingProvider(Protocol):
 
 
 class MemoryService:
-    def __init__(self, embedding_provider: EmbeddingProvider | None = None) -> None:
+    def __init__(self, embedding_provider: EmbeddingProvider | None = None, semantic_memory_service: SemanticMemoryService | None = None) -> None:
         self.repo = MemoryRepository()
         self.embedding_provider = embedding_provider
+        self.semantic_memory_service = semantic_memory_service or SemanticMemoryService()
 
     @staticmethod
     def _stable_version_id(memory_id: str, source_event_id: str | None) -> str:
@@ -57,7 +59,9 @@ class MemoryService:
             surface_policy=surface_policy, source_event_id=source_event_id,
             source_action=source_action, entity_type=entity_type, entity_id=entity_id,
         )
-        return self.repo.create_memory(memory)
+        stored = self.repo.create_memory(memory)
+        self.semantic_memory_service.try_index(stored)
+        return stored
 
     def correct_memory(
         self, user_id: str, previous_version_id: str, summary: str, *,
@@ -77,10 +81,16 @@ class MemoryService:
             status="corrected", subject_scope=subject_scope, explicitness=1.0,
             surface_policy=old.get("surface_policy", "default"), source_event_id=source_event_id,
         )
-        return self.repo.revise_memory(previous_version_id, memory, disposition="contradicted" if contradiction else "superseded")
+        stored = self.repo.revise_memory(previous_version_id, memory, disposition="contradicted" if contradiction else "superseded")
+        self.semantic_memory_service.try_remove(previous_version_id)
+        self.semantic_memory_service.try_index(stored)
+        return stored
 
     def expire_memory(self, user_id: str, version_id: str, subject_scope: str = "user") -> bool:
-        return self.repo.expire_memory(version_id, user_id, subject_scope)
+        expired = self.repo.expire_memory(version_id, user_id, subject_scope)
+        if expired:
+            self.semantic_memory_service.try_remove(version_id)
+        return expired
 
     def expire_state_memories(self, user_id: str, *, entity_type: str, entity_id: str) -> int:
         return self.repo.expire_state_memories(user_id, entity_type, entity_id)
